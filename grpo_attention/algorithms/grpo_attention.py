@@ -3,21 +3,30 @@
 Algorithm:
 1. Collect episode trajectory
 2. Compute A_episode via EMA normalization (same as REINFORCE)
-3. Feed state sequence into Credit Assignment Transformer (CAT):
-   - Embed states, append [RETURN] token
+3. Feed state-action sequence into Credit Assignment Transformer (CAT):
+   - Embed state-action pairs, append [RETURN] token
    - Pass through transformer encoder
-   - [RETURN] token predicts episode return (MSE loss)
-   - Attention weights from [RETURN] to states = credit assignment weights
-4. Per-timestep advantage: A_t = w_t * T * A_episode
-5. Policy gradient update using per-timestep advantages
-6. Update CAT via return prediction MSE loss
-7. Update EMA statistics
+   - Dedicated cross-attention credit head: [RETURN] queries state-action keys
+   - [RETURN] predicts episode return (MSE loss)
+4. Blend CAT credit weights with uniform weights (warmup schedule)
+5. Per-timestep advantage: A_t = w_blended_t * T * A_episode
+6. Policy gradient update
+7. Update CAT via return prediction MSE loss
+8. Update EMA statistics
+
+Key design choices:
+- Actions included in CAT input (credit is about which actions mattered)
+- Dedicated credit head with learnable temperature
+- Warmup: starts as REINFORCE (uniform weights), gradually shifts to CAT weights
+- Normalized return targets for stable CAT training
+- Small replay buffer for CAT (prevents catastrophic forgetting of early patterns)
 """
 
 import torch
 import torch.nn.functional as F
 import numpy as np
 import gymnasium as gym
+from collections import deque
 
 from ..models.policy import PolicyNetwork
 from ..models.credit_transformer import CreditAssignmentTransformer
@@ -49,14 +58,20 @@ class GRPOAttention:
             self.policy.parameters(), lr=config["lr_policy"]
         )
 
-        # Create Credit Assignment Transformer
-        self.cat = CreditAssignmentTransformer(obs_dim).to(self.device)
+        # Create Credit Assignment Transformer (with action embeddings)
+        self.cat = CreditAssignmentTransformer(
+            obs_dim, action_dim=action_dim, d_model=32, nhead=2,
+            num_layers=2, d_ff=64,
+        ).to(self.device)
         self.cat_optimizer = torch.optim.Adam(
             self.cat.parameters(), lr=config["lr_cat"]
         )
 
         # EMA baseline
         self.ema = EMAStats(alpha=config["ema_alpha"])
+
+        # Small replay buffer for CAT training stability
+        self.cat_replay = deque(maxlen=100)
 
         # Logger
         self.logger = CSVLogger(log_dir)
@@ -67,6 +82,21 @@ class GRPOAttention:
         # Tracking
         self.total_timesteps = 0
         self.total_episodes = 0
+
+    def _cat_mix_ratio(self) -> float:
+        """Compute the mixing ratio for CAT weights vs uniform weights.
+
+        Linear warmup over the first 20% of training:
+        - At start: 0.0 (pure uniform = REINFORCE)
+        - At 20% training: 0.7 (mostly CAT weights)
+        - Stays at 0.7 for rest of training
+        """
+        total = self.config["total_timesteps"]
+        warmup_end = total * 0.2
+        max_ratio = 0.7
+        if self.total_timesteps < warmup_end:
+            return max_ratio * (self.total_timesteps / warmup_end)
+        return max_ratio
 
     def collect_episodes(self, num_episodes: int) -> TrajectoryBuffer:
         """Collect a batch of episodes."""
@@ -102,26 +132,65 @@ class GRPOAttention:
 
         return buffer
 
-    def _pad_episodes(self, buffer: TrajectoryBuffer):
-        """Pad episode observations to same length for batched CAT forward pass."""
-        max_len = max(ep.length for ep in buffer.episodes)
-        batch_size = buffer.num_episodes
+    def _pad_episodes_with_actions(self, episodes):
+        """Pad episode observations and actions to same length."""
+        max_len = max(ep.length for ep in episodes)
+        batch_size = len(episodes)
 
-        obs_dim = buffer.episodes[0].observations[0].shape[0] if hasattr(
-            buffer.episodes[0].observations[0], 'shape'
-        ) else len(buffer.episodes[0].observations[0])
+        obs_dim = episodes[0].observations[0].shape[0] if hasattr(
+            episodes[0].observations[0], 'shape'
+        ) else len(episodes[0].observations[0])
 
         padded_obs = torch.zeros(batch_size, max_len, obs_dim, device=self.device)
+        padded_act = torch.zeros(batch_size, max_len, dtype=torch.long, device=self.device)
         mask = torch.zeros(batch_size, max_len, dtype=torch.bool, device=self.device)
 
-        for i, ep in enumerate(buffer.episodes):
+        for i, ep in enumerate(episodes):
             T = ep.length
             padded_obs[i, :T] = torch.tensor(
                 np.array(ep.observations), dtype=torch.float32, device=self.device
             )
+            padded_act[i, :T] = torch.tensor(
+                np.array(ep.actions), dtype=torch.long, device=self.device
+            )
             mask[i, :T] = True
 
-        return padded_obs, mask, max_len
+        return padded_obs, padded_act, mask, max_len
+
+    def _update_cat(self, episodes, returns):
+        """Update CAT with return prediction MSE loss."""
+        padded_obs, padded_act, mask, max_len = self._pad_episodes_with_actions(episodes)
+        target_returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
+
+        # Update running return statistics and normalize targets
+        self.cat.update_return_stats(target_returns)
+        normalized_targets = self.cat.normalize_returns(target_returns)
+
+        # Forward pass
+        predicted_returns, credit_weights = self.cat(padded_obs, mask, padded_act)
+        predicted_normalized = self.cat.normalize_returns(predicted_returns)
+
+        # MSE loss on normalized returns — this is the only CAT objective
+        # The attention patterns emerge naturally from learning to predict returns
+        cat_loss = F.mse_loss(predicted_normalized, normalized_targets)
+
+        self.cat_optimizer.zero_grad()
+        cat_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.cat.parameters(), 1.0)
+        self.cat_optimizer.step()
+
+        # Compute attention entropy for logging
+        eps = 1e-8
+        cw = credit_weights[:, :mask.shape[1]].detach()
+        log_weights = torch.log(cw + eps)
+        entropy_per_pos = -(cw * log_weights) * mask.float()
+        attn_entropy = entropy_per_pos.sum(dim=-1).mean().item()
+
+        return {
+            "cat_mse": cat_loss.item(),
+            "cat_entropy": attn_entropy,
+            "cat_temperature": (F.softplus(self.cat.temperature) + 0.1).item(),
+        }
 
     def update(self, buffer: TrajectoryBuffer):
         """Perform policy and CAT update."""
@@ -137,26 +206,33 @@ class GRPOAttention:
             ep_returns.append(G)
             ep_advantages.append(advantage)
 
-        # Pad episodes for CAT
-        padded_obs, mask, max_len = self._pad_episodes(buffer)
+        # Add to replay buffer
+        for ep, ret in zip(buffer.episodes, ep_returns):
+            self.cat_replay.append((ep, ret))
 
-        # Forward pass through CAT
-        predicted_returns, credit_weights = self.cat(padded_obs, mask)
+        # Train CAT: 1 epoch on current batch + 1 epoch on replay sample
+        # Current batch (most relevant data)
+        cat_stats = self._update_cat(buffer.episodes, ep_returns)
 
-        # CAT loss: MSE on return prediction
-        target_returns = torch.tensor(ep_returns, dtype=torch.float32, device=self.device)
-        cat_loss = F.mse_loss(predicted_returns, target_returns)
+        # One additional pass on replay for stability
+        if len(self.cat_replay) >= 20:
+            replay_size = min(len(self.cat_replay), 30)
+            indices = np.random.choice(len(self.cat_replay), replay_size, replace=False)
+            replay_eps = [self.cat_replay[i][0] for i in indices]
+            replay_rets = [self.cat_replay[i][1] for i in indices]
+            cat_stats = self._update_cat(replay_eps, replay_rets)
 
-        # Update CAT
-        self.cat_optimizer.zero_grad()
-        cat_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.cat.parameters(), 1.0)
-        self.cat_optimizer.step()
+        # Get credit weights for current batch (detached, no grad to policy)
+        padded_obs, padded_act, mask, max_len = self._pad_episodes_with_actions(
+            buffer.episodes
+        )
+        with torch.no_grad():
+            _, cat_weights = self.cat(padded_obs, mask, padded_act)
 
-        # Detach credit weights for policy update (no gradient flow from CAT to policy)
-        credit_weights = credit_weights.detach()
+        # Blend CAT weights with uniform weights using warmup schedule
+        mix = self._cat_mix_ratio()
 
-        # Build per-timestep advantages using credit weights
+        # Build per-timestep advantages
         all_obs = []
         all_actions = []
         all_advantages = []
@@ -165,8 +241,16 @@ class GRPOAttention:
             T = episode.length
             tensors = episode.to_tensors(self.device)
 
+            # Uniform weights: 1/T for each valid step
+            uniform_w = torch.ones(T, device=self.device) / T
+
+            # CAT weights for this episode
+            w_cat = cat_weights[i, :T]
+
+            # Blended weights: (1-mix)*uniform + mix*CAT
+            w = (1.0 - mix) * uniform_w + mix * w_cat
+
             # Per-timestep advantage: w_t * T * A_episode
-            w = credit_weights[i, :T]  # (T,)
             per_step_adv = w * T * ep_advantages[i]
 
             all_obs.append(tensors["observations"])
@@ -198,17 +282,22 @@ class GRPOAttention:
 
         return {
             "policy_loss": policy_loss.item(),
-            "cat_loss": cat_loss.item(),
+            "cat_loss": cat_stats.get("cat_mse", 0.0),
             "entropy": entropy.mean().item(),
-            "mean_credit_weight_std": credit_weights[:, :max_len][mask].std().item()
+            "mean_credit_weight_std": cat_weights[:, :max_len][mask].std().item()
             if mask.any() else 0.0,
+            "cat_entropy": cat_stats.get("cat_entropy", 0.0),
+            "cat_temperature": cat_stats.get("cat_temperature", 1.0),
+            "mix_ratio": mix,
         }
 
     def save_attention_snapshot(self, buffer: TrajectoryBuffer, label: str):
         """Save attention weights for visualization."""
-        padded_obs, mask, _ = self._pad_episodes(buffer)
+        padded_obs, padded_act, mask, _ = self._pad_episodes_with_actions(
+            buffer.episodes
+        )
         with torch.no_grad():
-            _, credit_weights = self.cat(padded_obs, mask)
+            _, credit_weights = self.cat(padded_obs, mask, padded_act)
 
         for i, ep in enumerate(buffer.episodes):
             T = ep.length
@@ -262,7 +351,8 @@ class GRPOAttention:
                     f"Episodes: {self.total_episodes:>5d} | "
                     f"Mean Return (100ep): {mean_return:.1f} | "
                     f"P.Loss: {stats['policy_loss']:.4f} | "
-                    f"CAT Loss: {stats['cat_loss']:.4f}"
+                    f"CAT Loss: {stats['cat_loss']:.4f} | "
+                    f"Mix: {stats['mix_ratio']:.2f}"
                 )
                 self.logger.log({
                     "timesteps": self.total_timesteps,
@@ -272,6 +362,9 @@ class GRPOAttention:
                     "cat_loss": stats["cat_loss"],
                     "entropy": stats["entropy"],
                     "credit_weight_std": stats["mean_credit_weight_std"],
+                    "cat_entropy": stats["cat_entropy"],
+                    "cat_temperature": stats["cat_temperature"],
+                    "mix_ratio": stats["mix_ratio"],
                 })
 
         self.logger.close()

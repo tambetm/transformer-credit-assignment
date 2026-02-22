@@ -14,8 +14,8 @@
   {
     "environment": "CartPole-v1",
     "algorithm": "GRPO + Attention (Ours)",
-    "mean_return": 196.8,
-    "std_return": 19.2
+    "mean_return": 171.2,
+    "std_return": 48.9
   },
   {
     "environment": "Acrobot-v1",
@@ -32,8 +32,8 @@
   {
     "environment": "Acrobot-v1",
     "algorithm": "GRPO + Attention (Ours)",
-    "mean_return": -333.3,
-    "std_return": 175.1
+    "mean_return": -351.9,
+    "std_return": 162.3
   },
   {
     "environment": "LunarLander-v3",
@@ -50,8 +50,8 @@
   {
     "environment": "LunarLander-v3",
     "algorithm": "GRPO + Attention (Ours)",
-    "mean_return": -118.9,
-    "std_return": 8.7
+    "mean_return": -124.7,
+    "std_return": 18.7
   },
   {
     "environment": "SparseCartPole",
@@ -68,7 +68,7 @@
   {
     "environment": "SparseCartPole",
     "algorithm": "GRPO + Attention (Ours)",
-    "mean_return": 105.5,
-    "std_return": 6.6
+    "mean_return": 91.5,
+    "std_return": 17.8
   }
 ]

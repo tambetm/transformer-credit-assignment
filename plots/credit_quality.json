@@ -1,6 +1,6 @@
 {
   "env": "SparseCartPole",
-  "mean_spearman": -0.44139767754434106,
-  "std_spearman": 0.19269769908226864,
+  "mean_spearman": -0.48934082147889785,
+  "std_spearman": 0.1580384579537879,
   "n_episodes": 5
 }
