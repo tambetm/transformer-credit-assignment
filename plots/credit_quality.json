@@ -1,6 +1,11 @@
 {
   "env": "SparseCartPole",
-  "mean_spearman": -0.48934082147889785,
-  "std_spearman": 0.1580384579537879,
-  "n_episodes": 5
+  "n_episodes": 5,
+  "linear_proxy": {
+    "mean_spearman": -0.48934082147889785,
+    "std_spearman": 0.1580384579537879
+  },
+  "oracle_td": {
+    "profile_correlation": -0.7140936374549821
+  }
 }
