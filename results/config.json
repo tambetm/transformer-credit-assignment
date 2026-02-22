@@ -1,0 +1,15 @@
+{
+  "num_seeds": 5,
+  "total_timesteps": 200000,
+  "lr_policy": 0.0003,
+  "lr_cat": 0.001,
+  "lr_value": 0.001,
+  "gamma": 0.99,
+  "ema_alpha": 0.01,
+  "ppo_clip": 0.2,
+  "ppo_epochs": 4,
+  "ppo_gae_lambda": 0.95,
+  "batch_size": 2048,
+  "episodes_per_update": 10,
+  "device": "cpu"
+}

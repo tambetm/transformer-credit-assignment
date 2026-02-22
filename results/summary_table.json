@@ -1,0 +1,74 @@
+[
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "REINFORCE + EMA",
+    "mean_return": 223.5,
+    "std_return": 5.7
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "PPO",
+    "mean_return": 490.2,
+    "std_return": 6.0
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "GRPO + Attention (Ours)",
+    "mean_return": 196.8,
+    "std_return": 19.2
+  },
+  {
+    "environment": "Acrobot-v1",
+    "algorithm": "REINFORCE + EMA",
+    "mean_return": -279.7,
+    "std_return": 180.2
+  },
+  {
+    "environment": "Acrobot-v1",
+    "algorithm": "PPO",
+    "mean_return": -88.5,
+    "std_return": 3.9
+  },
+  {
+    "environment": "Acrobot-v1",
+    "algorithm": "GRPO + Attention (Ours)",
+    "mean_return": -333.3,
+    "std_return": 175.1
+  },
+  {
+    "environment": "LunarLander-v3",
+    "algorithm": "REINFORCE + EMA",
+    "mean_return": -111.0,
+    "std_return": 8.5
+  },
+  {
+    "environment": "LunarLander-v3",
+    "algorithm": "PPO",
+    "mean_return": 33.2,
+    "std_return": 40.5
+  },
+  {
+    "environment": "LunarLander-v3",
+    "algorithm": "GRPO + Attention (Ours)",
+    "mean_return": -118.9,
+    "std_return": 8.7
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "REINFORCE + EMA",
+    "mean_return": 103.8,
+    "std_return": 6.7
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "PPO",
+    "mean_return": 42.5,
+    "std_return": 4.2
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "GRPO + Attention (Ours)",
+    "mean_return": 105.5,
+    "std_return": 6.6
+  }
+]
