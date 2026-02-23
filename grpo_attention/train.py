@@ -17,6 +17,7 @@ from .algorithms.reinforce_ema import ReinforceEMA
 from .algorithms.ppo import PPO
 from .algorithms.grpo_attention import GRPOAttention
 from .algorithms.rudder_transformer import RUDDERTransformerAlgo
+from .algorithms.lstm_rudder import LSTMRUDDERAlgo
 
 
 # Default configuration
@@ -50,6 +51,7 @@ ALGORITHMS = {
     "PPO": PPO,
     "GRPO_Attention": GRPOAttention,
     "RUDDER_Transformer": RUDDERTransformerAlgo,
+    "LSTM_RUDDER": LSTMRUDDERAlgo,
 }
 
 
@@ -83,8 +85,8 @@ def run_experiment(algo_name, env_name, env_fn, config, seed, output_dir):
         with open(attn_path, "w") as f:
             json.dump(agent.attention_history, f)
 
-    # Save value prediction history for RUDDER_Transformer
-    if algo_name == "RUDDER_Transformer" and hasattr(agent, "value_history"):
+    # Save value prediction history for RUDDER_Transformer and LSTM_RUDDER
+    if algo_name in ("RUDDER_Transformer", "LSTM_RUDDER") and hasattr(agent, "value_history"):
         val_path = os.path.join(log_dir, "value_history.json")
         with open(val_path, "w") as f:
             json.dump(agent.value_history, f)

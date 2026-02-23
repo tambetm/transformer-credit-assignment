@@ -6,6 +6,6 @@
     "std_spearman": 0.1580384579537879
   },
   "oracle_td": {
-    "profile_correlation": -0.7140936374549821
+    "profile_correlation": -0.3361824729891957
   }
 }

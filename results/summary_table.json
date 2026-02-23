@@ -13,9 +13,21 @@
   },
   {
     "environment": "CartPole-v1",
-    "algorithm": "GRPO + Attention (Ours)",
+    "algorithm": "GRPO + Attention v2",
     "mean_return": 171.2,
     "std_return": 48.9
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "Transformer-RUDDER + GRPO",
+    "mean_return": 126.1,
+    "std_return": 33.1
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "LSTM-RUDDER + GRPO",
+    "mean_return": 201.2,
+    "std_return": 37.8
   },
   {
     "environment": "Acrobot-v1",
@@ -31,9 +43,21 @@
   },
   {
     "environment": "Acrobot-v1",
-    "algorithm": "GRPO + Attention (Ours)",
+    "algorithm": "GRPO + Attention v2",
     "mean_return": -351.9,
     "std_return": 162.3
+  },
+  {
+    "environment": "Acrobot-v1",
+    "algorithm": "Transformer-RUDDER + GRPO",
+    "mean_return": -365.0,
+    "std_return": 135.1
+  },
+  {
+    "environment": "Acrobot-v1",
+    "algorithm": "LSTM-RUDDER + GRPO",
+    "mean_return": -350.6,
+    "std_return": 158.4
   },
   {
     "environment": "LunarLander-v3",
@@ -49,9 +73,21 @@
   },
   {
     "environment": "LunarLander-v3",
-    "algorithm": "GRPO + Attention (Ours)",
+    "algorithm": "GRPO + Attention v2",
     "mean_return": -124.7,
     "std_return": 18.7
+  },
+  {
+    "environment": "LunarLander-v3",
+    "algorithm": "Transformer-RUDDER + GRPO",
+    "mean_return": -121.7,
+    "std_return": 12.4
+  },
+  {
+    "environment": "LunarLander-v3",
+    "algorithm": "LSTM-RUDDER + GRPO",
+    "mean_return": -104.5,
+    "std_return": 6.6
   },
   {
     "environment": "SparseCartPole",
@@ -67,8 +103,20 @@
   },
   {
     "environment": "SparseCartPole",
-    "algorithm": "GRPO + Attention (Ours)",
+    "algorithm": "GRPO + Attention v2",
     "mean_return": 91.5,
     "std_return": 17.8
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "Transformer-RUDDER + GRPO",
+    "mean_return": 130.6,
+    "std_return": 29.4
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "LSTM-RUDDER + GRPO",
+    "mean_return": 110.5,
+    "std_return": 7.6
   }
 ]
