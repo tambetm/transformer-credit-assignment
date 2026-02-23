@@ -1,0 +1,2 @@
+timesteps,episodes,mean_return,policy_loss,entropy
+49933,100,-499.32,-0.0018158410675823689,1.0837345123291016
