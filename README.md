@@ -34,6 +34,7 @@ Key advantages over attention-based credit:
 2. **PPO** — Learned value function with GAE (strong baseline)
 3. **GRPO + Attention** — Cross-attention credit weights from bidirectional transformer
 4. **RUDDER + Transformer** — Value differences from causal transformer
+5. **RUDDER + LSTM** — Value differences from LSTM (ablation: LSTM vs Transformer for RUDDER)
 
 ## Environments
 
@@ -67,26 +68,29 @@ All experiments: 5 seeds, 200k timesteps each. Mean ± std of final 100-episode 
 | PPO                | **490.2 ± 6.0**  | **-88.5 ± 3.9**   | **33.2 ± 40.5**  | 42.5 ± 4.2        |
 | GRPO + Attention   | 171.2 ± 48.9     | -351.9 ± 162.3     | -124.7 ± 18.7    | 91.5 ± 17.8       |
 | RUDDER + Transf.   | 126.1 ± 33.1     | -365.0 ± 135.1     | -121.7 ± 12.4    | **130.6 ± 29.4**  |
+| RUDDER + LSTM      | 201.2 ± 37.8     | -350.6 ± 158.4     | -104.5 ± 6.6     | 110.5 ± 7.6       |
 
 ### Key Findings
 
-- **SparseCartPole** (terminal-only reward) — the key credit assignment test: **RUDDER+Transformer achieves the best performance (130.6)**, outperforming REINFORCE+EMA (103.8), GRPO+Attention (91.5), and PPO (42.5). The causal value-difference approach provides better credit assignment than both attention weights and uniform advantages in sparse-reward settings.
+- **SparseCartPole** (terminal-only reward) — the key credit assignment test: **RUDDER+Transformer achieves the best performance (130.6)**, outperforming RUDDER+LSTM (110.5), REINFORCE+EMA (103.8), GRPO+Attention (91.5), and PPO (42.5). The causal value-difference approach provides better credit assignment than both attention weights and uniform advantages in sparse-reward settings.
 - **PPO dominates dense/shaped rewards** (CartPole, Acrobot, LunarLander) — a learned value function with GAE is hard to beat when reward signal is available at every step.
-- **Critic-free methods outperform PPO on SparseCartPole** — PPO's state-value function struggles with terminal-only reward. All three critic-free methods (REINFORCE, GRPO+Attn, RUDDER+TF) substantially outperform PPO here.
-- **RUDDER+TF vs GRPO+Attention**: On the sparse reward task that specifically tests credit assignment, RUDDER's value differences (+130.6) significantly outperform attention weights (+91.5). The signed, telescoping value differences provide more useful learning signal than non-negative attention weights.
-- **Dense reward environments**: RUDDER+TF and GRPO+Attention perform comparably on LunarLander (~-122 vs ~-125). On CartPole and Acrobot, both underperform REINFORCE, suggesting the transformer overhead doesn't help when uniform credit is sufficient.
+- **Critic-free methods outperform PPO on SparseCartPole** — PPO's state-value function struggles with terminal-only reward. All four critic-free methods substantially outperform PPO here.
+- **Transformer vs LSTM for RUDDER**: On SparseCartPole, RUDDER+Transformer (130.6) outperforms RUDDER+LSTM (110.5), suggesting parallel attention helps credit assignment over sequential processing. However, RUDDER+LSTM is competitive on dense-reward tasks — it achieves the best LunarLander score (-104.5) among all methods except PPO, and scores 201.2 on CartPole (vs 126.1 for RUDDER+Transformer).
+- **RUDDER+TF vs GRPO+Attention**: On the sparse reward task, RUDDER's value differences (+130.6) significantly outperform attention weights (+91.5). The signed, telescoping value differences provide more useful learning signal than non-negative attention weights.
+- **Dense reward environments**: RUDDER+LSTM performs surprisingly well on CartPole (201.2) and LunarLander (-104.5), approaching or matching REINFORCE+EMA. The LSTM's sequential inductive bias may help on shorter-horizon tasks where long-range attention is less critical.
 
 ### Architecture Comparison
 
-| Property                    | GRPO + Attention (CAT)           | RUDDER + Transformer          |
-|-----------------------------|----------------------------------|-------------------------------|
-| Attention masking           | Bidirectional (full)             | Causal (autoregressive)       |
-| Credit mechanism            | Cross-attention weights          | Value differences V̂(t)-V̂(t-1)|
-| Credit sign                 | Non-negative only                | Positive or negative          |
-| Training signal per episode | 1 (return from [RETURN] token)   | T (return at every position)  |
-| Warmup needed               | Yes (uniform → CAT over 20%)    | No                            |
-| Telescoping guarantee       | No (ad-hoc w*T scaling)          | Yes: Σ Â_t ≈ G - E[G]       |
-| Special tokens              | [RETURN] token                   | None                          |
+| Property                    | GRPO + Attention (CAT)           | RUDDER + Transformer          | RUDDER + LSTM               |
+|-----------------------------|----------------------------------|-------------------------------|-----------------------------|
+| Sequence model              | Bidirectional Transformer        | Causal Transformer            | LSTM                        |
+| Credit mechanism            | Cross-attention weights          | Value differences V̂(t)-V̂(t-1)| Value differences V̂(t)-V̂(t-1)|
+| Credit sign                 | Non-negative only                | Positive or negative          | Positive or negative        |
+| Training signal per episode | 1 (return from [RETURN] token)   | T (return at every position)  | T (return at every position)|
+| Warmup needed               | Yes (uniform → CAT over 20%)    | No                            | No                          |
+| Telescoping guarantee       | No (ad-hoc w*T scaling)          | Yes: Σ Â_t ≈ G - E[G]       | Yes: Σ Â_t ≈ G - E[G]     |
+| Special tokens              | [RETURN] token                   | None                          | None                        |
+| Parallelism                 | Full (bidirectional)             | Training-parallel, causal     | Sequential only             |
 
 ### Limitations
 
@@ -103,12 +107,14 @@ grpo_attention/
 │   ├── policy.py                   # Shared policy network (MLP)
 │   ├── value.py                    # Value network (PPO only)
 │   ├── credit_transformer.py       # Bidirectional CAT (GRPO+Attention)
-│   └── rudder_transformer.py       # Causal transformer (RUDDER+Transformer)
+│   ├── rudder_transformer.py       # Causal transformer (RUDDER+Transformer)
+│   └── lstm_predictor.py           # LSTM return predictor (RUDDER+LSTM)
 ├── algorithms/
 │   ├── reinforce_ema.py            # REINFORCE + EMA baseline
 │   ├── ppo.py                      # PPO implementation
 │   ├── grpo_attention.py           # GRPO + Attention
-│   └── rudder_transformer.py       # RUDDER + Transformer
+│   ├── rudder_transformer.py       # RUDDER + Transformer
+│   └── lstm_rudder.py              # RUDDER + LSTM (ablation)
 ├── utils/
 │   ├── buffer.py                   # Trajectory storage
 │   ├── ema.py                      # EMA statistics tracker
