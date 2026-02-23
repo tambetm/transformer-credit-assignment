@@ -64,6 +64,20 @@ def load_attention_history(results_dir, env_name):
     return all_history
 
 
+def load_value_history(results_dir, env_name):
+    """Load value prediction history for RUDDER_Transformer."""
+    pattern = os.path.join(
+        results_dir, "RUDDER_Transformer", env_name, "seed_*", "value_history.json"
+    )
+    files = sorted(glob.glob(pattern))
+
+    all_history = []
+    for f in files:
+        with open(f, "r") as fp:
+            all_history.extend(json.load(fp))
+    return all_history
+
+
 def interpolate_to_common_x(all_data, num_points=200):
     """Interpolate metrics to common x-axis for averaging across seeds."""
     if not all_data:
@@ -96,12 +110,14 @@ ALGO_COLORS = {
     "REINFORCE_EMA": "#2196F3",
     "PPO": "#4CAF50",
     "GRPO_Attention": "#FF5722",
+    "RUDDER_Transformer": "#9C27B0",
 }
 
 ALGO_LABELS = {
     "REINFORCE_EMA": "REINFORCE + EMA",
     "PPO": "PPO",
-    "GRPO_Attention": "GRPO + Attention (Ours)",
+    "GRPO_Attention": "GRPO + Attention",
+    "RUDDER_Transformer": "RUDDER + Transformer",
 }
 
 
@@ -188,6 +204,65 @@ def plot_attention_weights(results_dir, output_dir, environments):
         fig.suptitle(f"Attention Weights: {env_name}", fontsize=13)
         fig.tight_layout()
         filepath = os.path.join(output_dir, f"attention_{env_name}.png")
+        fig.savefig(filepath, dpi=150)
+        plt.close(fig)
+        print(f"Saved: {filepath}")
+
+
+def plot_value_predictions(results_dir, output_dir, environments):
+    """Visualize RUDDER value predictions and value differences."""
+    os.makedirs(output_dir, exist_ok=True)
+
+    for env_name in environments:
+        history = load_value_history(results_dir, env_name)
+        if not history:
+            continue
+
+        # Group by label (training stage)
+        labels = sorted(set(h["label"] for h in history))
+        n_labels = len(labels)
+
+        if n_labels == 0:
+            continue
+
+        fig, axes = plt.subplots(2, n_labels, figsize=(6 * n_labels, 8), squeeze=False)
+
+        for idx, label in enumerate(labels):
+            stage_episodes = [h for h in history if h["label"] == label]
+            if not stage_episodes:
+                continue
+
+            ep = stage_episodes[0]
+            timesteps = ep["timesteps"]
+            values = ep["value_predictions"]
+            diffs = ep["value_diffs"]
+            rewards = ep["rewards"]
+
+            # Top row: value predictions V̂(t)
+            ax_top = axes[0][idx]
+            ax_top.plot(timesteps, values, color="#9C27B0", linewidth=2,
+                        label="V̂(t)")
+            ax_top.axhline(y=ep["total_return"], color="#FF5722", linestyle="--",
+                           linewidth=1, alpha=0.7, label=f"G={ep['total_return']:.0f}")
+            ax_top.set_xlabel("Timestep", fontsize=10)
+            ax_top.set_ylabel("Predicted Return", fontsize=10)
+            ax_top.set_title(f"{label} — Value Predictions", fontsize=11)
+            ax_top.legend(fontsize=9)
+            ax_top.grid(True, alpha=0.3)
+
+            # Bottom row: value differences (advantages)
+            ax_bot = axes[1][idx]
+            colors = ["#4CAF50" if d >= 0 else "#F44336" for d in diffs]
+            ax_bot.bar(timesteps, diffs, color=colors, alpha=0.7)
+            ax_bot.axhline(y=0, color="black", linewidth=0.5)
+            ax_bot.set_xlabel("Timestep", fontsize=10)
+            ax_bot.set_ylabel("Value Difference (Advantage)", fontsize=10)
+            ax_bot.set_title(f"{label} — Credit Assignment", fontsize=11)
+            ax_bot.grid(True, alpha=0.3)
+
+        fig.suptitle(f"RUDDER Value Predictions: {env_name}", fontsize=13)
+        fig.tight_layout()
+        filepath = os.path.join(output_dir, f"rudder_values_{env_name}.png")
         fig.savefig(filepath, dpi=150)
         plt.close(fig)
         print(f"Saved: {filepath}")
@@ -541,7 +616,7 @@ def main():
     args = parser.parse_args()
 
     environments = ["CartPole-v1", "Acrobot-v1", "LunarLander-v3", "SparseCartPole"]
-    algorithms = ["REINFORCE_EMA", "PPO", "GRPO_Attention"]
+    algorithms = ["REINFORCE_EMA", "PPO", "GRPO_Attention", "RUDDER_Transformer"]
 
     # Filter to environments/algorithms that have results
     available_envs = []
@@ -562,6 +637,7 @@ def main():
     # Generate plots
     plot_learning_curves(args.results_dir, args.output_dir, available_envs, algorithms)
     plot_attention_weights(args.results_dir, args.output_dir, available_envs)
+    plot_value_predictions(args.results_dir, args.output_dir, available_envs)
     compute_credit_quality(args.results_dir, args.output_dir)
     print_summary_table(args.results_dir, available_envs, algorithms)
 

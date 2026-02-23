@@ -16,6 +16,7 @@ from .envs.sparse_cartpole import SparseCartPole
 from .algorithms.reinforce_ema import ReinforceEMA
 from .algorithms.ppo import PPO
 from .algorithms.grpo_attention import GRPOAttention
+from .algorithms.rudder_transformer import RUDDERTransformerAlgo
 
 
 # Default configuration
@@ -48,6 +49,7 @@ ALGORITHMS = {
     "REINFORCE_EMA": ReinforceEMA,
     "PPO": PPO,
     "GRPO_Attention": GRPOAttention,
+    "RUDDER_Transformer": RUDDERTransformerAlgo,
 }
 
 
@@ -80,6 +82,12 @@ def run_experiment(algo_name, env_name, env_fn, config, seed, output_dir):
         attn_path = os.path.join(log_dir, "attention_history.json")
         with open(attn_path, "w") as f:
             json.dump(agent.attention_history, f)
+
+    # Save value prediction history for RUDDER_Transformer
+    if algo_name == "RUDDER_Transformer" and hasattr(agent, "value_history"):
+        val_path = os.path.join(log_dir, "value_history.json")
+        with open(val_path, "w") as f:
+            json.dump(agent.value_history, f)
 
     results_path = os.path.join(log_dir, "results.json")
     with open(results_path, "w") as f:
