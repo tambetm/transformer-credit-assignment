@@ -1,33 +1,46 @@
-# GRPO + Attention-Based Credit Assignment
+# Transformer-Based Credit Assignment for RL
 
-Validating a novel RL algorithm that combines **GRPO-style critic-free advantage estimation** with **attention-based credit assignment** using a lightweight "Credit Assignment Transformer" (CAT).
+Comparing approaches to **per-timestep credit assignment** in episodic reinforcement learning using lightweight transformers, without a critic network.
 
-## Core Idea
+## Approaches
 
-Standard GRPO computes episode-level advantages:
+### 1. GRPO + Attention (CAT)
+
+Train a bidirectional transformer to predict episode returns. Use cross-attention weights from a dedicated `[RETURN]` token to redistribute the episode-level advantage:
 ```
-A_episode = (G - μ_EMA) / σ_EMA
+w_t = credit_attention([RETURN] → (s_t, a_t))
+Â_t = w_blended_t * T * A_episode
 ```
 
-Applying a single scalar to all timesteps provides poor credit assignment. We train a lightweight transformer that predicts episode returns from state-action sequences and use its cross-attention weights to redistribute the advantage:
+### 2. RUDDER + Transformer (new)
+
+Train a **causal** transformer to predict episode returns at each timestep. Each position only attends to past positions (like RUDDER's LSTM, but with a transformer). Per-timestep advantages come from **value differences**:
 ```
-w_t = credit_attention([RETURN] → (s_t, a_t))     # from the CAT
-w_blended_t = (1-λ) * (1/T) + λ * w_t             # mix with uniform (warmup)
-Â_t = w_blended_t * T * A_episode                  # per-timestep advantage
+V̂(t) = TransformerCausal(s_0, a_0, ..., s_t, a_t)   # predict G
+Â_t = V̂(t) - V̂(t-1)                                  # value difference
 ```
+
+These telescope: `Σ Â_t = V̂(T-1) - V̂(-1) ≈ G - E[G]`, automatically decomposing the episode advantage.
+
+Key advantages over attention-based credit:
+- **Signed**: value diffs can be negative (bad action reduces predicted return)
+- **No warmup**: naturally well-behaved from the start
+- **T× training signal**: MSE loss at every position, not just one `[RETURN]` token
+- **Principled**: measures marginal information contribution, not correlation
 
 ## Algorithms Compared
 
 1. **REINFORCE + EMA** — Uniform episode advantage, no per-step credit assignment
 2. **PPO** — Learned value function with GAE (strong baseline)
-3. **GRPO + Attention** — Our method: attention-based credit assignment without a critic
+3. **GRPO + Attention** — Cross-attention credit weights from bidirectional transformer
+4. **RUDDER + Transformer** — Value differences from causal transformer
 
 ## Environments
 
-1. **CartPole-v1** — Sanity check (dense reward)
+1. **CartPole-v1** — Dense reward (sanity check)
 2. **Acrobot-v1** — Sparse reward, moderate difficulty
 3. **LunarLander-v3** — Shaped reward, coordinated behavior
-4. **SparseCartPole** — CartPole with terminal-only reward (key test)
+4. **SparseCartPole** — Terminal-only reward (key credit assignment test)
 
 ## Usage
 
@@ -38,7 +51,7 @@ pip install -r requirements.txt
 python -m grpo_attention.train --output-dir results
 
 # Run specific experiments
-python -m grpo_attention.train --envs CartPole-v1 SparseCartPole --algos GRPO_Attention PPO --seeds 3
+python -m grpo_attention.train --envs CartPole-v1 SparseCartPole --algos RUDDER_Transformer PPO --seeds 3
 
 # Generate plots
 python -m grpo_attention.visualize --results-dir results --output-dir plots
@@ -46,32 +59,40 @@ python -m grpo_attention.visualize --results-dir results --output-dir plots
 
 ## Results
 
-All experiments run with 5 seeds, 200k timesteps each. Mean ± std of final 100-episode returns:
+All experiments: 5 seeds, 200k timesteps each. Mean ± std of final 100-episode returns:
 
-| Environment    | REINFORCE + EMA   | PPO              | GRPO + Attention (Ours) |
-|----------------|-------------------|------------------|-------------------------|
-| CartPole-v1    | 223.5 ± 5.7      | **490.2 ± 6.0**  | 171.2 ± 48.9           |
-| Acrobot-v1     | -279.7 ± 180.2   | **-88.5 ± 3.9**  | -351.9 ± 162.3         |
-| LunarLander-v3 | -111.0 ± 8.5     | **33.2 ± 40.5**  | -124.7 ± 18.7          |
-| SparseCartPole | **103.8 ± 6.7**  | 42.5 ± 4.2      | 91.5 ± 17.8            |
+| Algorithm          | CartPole-v1       | Acrobot-v1         | LunarLander-v3    | SparseCartPole     |
+|--------------------|-------------------|--------------------|-------------------|--------------------|
+| REINFORCE + EMA    | 223.5 ± 5.7      | -279.7 ± 180.2     | -111.0 ± 8.5     | 103.8 ± 6.7       |
+| PPO                | **490.2 ± 6.0**  | **-88.5 ± 3.9**   | **33.2 ± 40.5**  | 42.5 ± 4.2        |
+| GRPO + Attention   | 171.2 ± 48.9     | -351.9 ± 162.3     | -124.7 ± 18.7    | 91.5 ± 17.8       |
+| RUDDER + Transf.   | 126.1 ± 33.1     | -365.0 ± 135.1     | -121.7 ± 12.4    | **130.6 ± 29.4**  |
 
 ### Key Findings
 
-- **SparseCartPole** (terminal-only reward) — the key test: Both critic-free methods (REINFORCE+EMA and GRPO+Attention) significantly outperform PPO (~100 vs ~42). PPO's value function struggles to learn meaningful value estimates with purely sparse rewards. GRPO+Attention reaches ~91, comparable to REINFORCE's ~104.
-- **CartPole-v1**: PPO solves the environment (~490); both critic-free methods learn but converge more slowly without a value function critic. GRPO+Attention shows higher seed variance than REINFORCE.
-- **Acrobot-v1**: PPO converges reliably while both critic-free methods show high variance across seeds, with some seeds not converging within 200k steps.
-- **LunarLander-v3**: PPO learns a positive-return policy; both critic-free methods plateau around -110 to -125.
-- The attention weights from the CAT show non-uniform patterns: higher weights on early timesteps and near episode end, with characteristic peaks around critical decision points.
+- **SparseCartPole** (terminal-only reward) — the key credit assignment test: **RUDDER+Transformer achieves the best performance (130.6)**, outperforming REINFORCE+EMA (103.8), GRPO+Attention (91.5), and PPO (42.5). The causal value-difference approach provides better credit assignment than both attention weights and uniform advantages in sparse-reward settings.
+- **PPO dominates dense/shaped rewards** (CartPole, Acrobot, LunarLander) — a learned value function with GAE is hard to beat when reward signal is available at every step.
+- **Critic-free methods outperform PPO on SparseCartPole** — PPO's state-value function struggles with terminal-only reward. All three critic-free methods (REINFORCE, GRPO+Attn, RUDDER+TF) substantially outperform PPO here.
+- **RUDDER+TF vs GRPO+Attention**: On the sparse reward task that specifically tests credit assignment, RUDDER's value differences (+130.6) significantly outperform attention weights (+91.5). The signed, telescoping value differences provide more useful learning signal than non-negative attention weights.
+- **Dense reward environments**: RUDDER+TF and GRPO+Attention perform comparably on LunarLander (~-122 vs ~-125). On CartPole and Acrobot, both underperform REINFORCE, suggesting the transformer overhead doesn't help when uniform credit is sufficient.
 
-### Architecture Evolution
+### Architecture Comparison
 
-The CAT was iteratively improved:
-1. **v1**: State-only input, self-attention weights, 1 layer — matched REINFORCE but no improvement
-2. **v2**: Added action embeddings, dedicated cross-attention credit head, learnable temperature, 2 layers, normalized return targets — initially collapsed (attention too peaked), fixed via uniform-weight mixing with warmup schedule
+| Property                    | GRPO + Attention (CAT)           | RUDDER + Transformer          |
+|-----------------------------|----------------------------------|-------------------------------|
+| Attention masking           | Bidirectional (full)             | Causal (autoregressive)       |
+| Credit mechanism            | Cross-attention weights          | Value differences V̂(t)-V̂(t-1)|
+| Credit sign                 | Non-negative only                | Positive or negative          |
+| Training signal per episode | 1 (return from [RETURN] token)   | T (return at every position)  |
+| Warmup needed               | Yes (uniform → CAT over 20%)    | No                            |
+| Telescoping guarantee       | No (ad-hoc w*T scaling)          | Yes: Σ Â_t ≈ G - E[G]       |
+| Special tokens              | [RETURN] token                   | None                          |
 
-### Limitations & Discussion
+### Limitations
 
-The core challenge: the CAT's attention weights reflect *what predicts returns* (correlation), not *what caused returns* (causation). In CartPole, early states with small pole angles are predictive of long episodes, so the CAT attends to them — but the causally important actions are near the end where a wrong move causes failure. Bridging this prediction-causation gap is a fundamental challenge for attention-based credit assignment and a direction for future work.
+- All transformer-based methods add overhead vs plain REINFORCE. On dense-reward tasks where uniform credit suffices, this overhead hurts.
+- The causal transformer's early-timestep predictions are noisy (limited info), though value *differences* can still be informative even when absolute predictions are poor.
+- Higher seed variance than REINFORCE on some environments, likely due to the additional optimization landscape of the transformer.
 
 ## Project Structure
 
@@ -81,11 +102,13 @@ grpo_attention/
 ├── models/
 │   ├── policy.py                   # Shared policy network (MLP)
 │   ├── value.py                    # Value network (PPO only)
-│   └── credit_transformer.py       # Credit Assignment Transformer
+│   ├── credit_transformer.py       # Bidirectional CAT (GRPO+Attention)
+│   └── rudder_transformer.py       # Causal transformer (RUDDER+Transformer)
 ├── algorithms/
 │   ├── reinforce_ema.py            # REINFORCE + EMA baseline
 │   ├── ppo.py                      # PPO implementation
-│   └── grpo_attention.py           # GRPO + Attention (ours)
+│   ├── grpo_attention.py           # GRPO + Attention
+│   └── rudder_transformer.py       # RUDDER + Transformer
 ├── utils/
 │   ├── buffer.py                   # Trajectory storage
 │   ├── ema.py                      # EMA statistics tracker
