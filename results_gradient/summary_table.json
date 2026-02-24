@@ -10,8 +10,8 @@
     "environment": "CartPole-v1",
     "algorithm": "PPO",
     "algo_key": "PPO",
-    "mean_return": 490.2,
-    "std_return": 6.0
+    "mean_return": 489.4,
+    "std_return": 4.8
   },
   {
     "environment": "CartPole-v1",
@@ -49,6 +49,20 @@
     "std_return": 10.7
   },
   {
+    "environment": "CartPole-v1",
+    "algorithm": "GSVD (Grad-Sharp VD)",
+    "algo_key": "GSVD",
+    "mean_return": 107.1,
+    "std_return": 12.7
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "Attention Rollout",
+    "algo_key": "Attention_Rollout",
+    "mean_return": 126.4,
+    "std_return": 25.5
+  },
+  {
     "environment": "SparseCartPole",
     "algorithm": "REINFORCE + EMA",
     "algo_key": "REINFORCE_EMA",
@@ -66,8 +80,8 @@
     "environment": "SparseCartPole",
     "algorithm": "RUDDER Value Diff",
     "algo_key": "RUDDER_ValueDiff",
-    "mean_return": 120.1,
-    "std_return": 32.3
+    "mean_return": 120.8,
+    "std_return": 33.1
   },
   {
     "environment": "SparseCartPole",
@@ -96,5 +110,19 @@
     "algo_key": "Hybrid_Credit",
     "mean_return": 72.5,
     "std_return": 5.9
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "GSVD (Grad-Sharp VD)",
+    "algo_key": "GSVD",
+    "mean_return": 112.7,
+    "std_return": 10.3
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "Attention Rollout",
+    "algo_key": "Attention_Rollout",
+    "mean_return": 108.2,
+    "std_return": 18.9
   }
 ]

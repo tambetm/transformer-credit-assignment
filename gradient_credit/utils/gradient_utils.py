@@ -135,6 +135,85 @@ def hybrid_credit_to_advantages(gradient_credit, value_diffs, episode_advantages
     return all_obs, all_actions, all_advantages
 
 
+def gsvd_credit_to_advantages(gradient_saliency, value_diffs, episodes, mask,
+                               temperature, device="cpu"):
+    """Gradient-Sharpened Value Differences (GSVD).
+
+    Uses gradient saliency (||dg/d_emb_t||_2) as softmax weights to sharpen
+    value differences. Higher saliency = model is more sensitive to this timestep
+    = credit assignment is more reliable here.
+
+    A_t = vd_t * softmax(saliency_t / tau) * T
+
+    When tau -> inf: weights -> uniform -> reduces to pure value diffs.
+    When tau -> 0: weights concentrate on highest-saliency timestep.
+
+    gradient_saliency: (B, T) non-negative (from grad_norm)
+    value_diffs: (B, T) signed value differences
+    temperature: float, controls sharpening strength
+    """
+    all_obs = []
+    all_actions = []
+    all_advantages = []
+
+    for i, episode in enumerate(episodes):
+        T = episode.length
+        tensors = episode.to_tensors(device)
+
+        vd = value_diffs[i, :T]
+        sal = gradient_saliency[i, :T]
+
+        # Softmax sharpening: weights sum to T (mean weight = 1)
+        weights = torch.softmax(sal / max(temperature, 1e-6), dim=0) * T
+
+        per_step_adv = vd * weights
+
+        all_obs.append(tensors["observations"])
+        all_actions.append(tensors["actions"])
+        all_advantages.append(per_step_adv)
+
+    return all_obs, all_actions, all_advantages
+
+
+def attention_rollout_credit_to_advantages(rollout_credit, value_diffs, episodes,
+                                           mask, device="cpu"):
+    """Attention Rollout Credit: combine rollout weights with value differences.
+
+    Uses attention rollout (multi-layer information flow) to weight value diffs.
+    Higher rollout flow = model's final prediction depended more on this timestep
+    = value difference here is more meaningful.
+
+    A_t = vd_t * (rollout_t / mean(rollout_t))
+
+    When rollout is uniform: reduces to pure value diffs.
+
+    rollout_credit: (B, T) non-negative attention flow weights
+    value_diffs: (B, T) signed value differences
+    """
+    all_obs = []
+    all_actions = []
+    all_advantages = []
+
+    for i, episode in enumerate(episodes):
+        T = episode.length
+        tensors = episode.to_tensors(device)
+
+        vd = value_diffs[i, :T]
+        rollout = rollout_credit[i, :T]
+
+        # Normalize to mean 1 so uniform rollout = pure value diffs
+        rollout_mean = rollout.mean().clamp(min=1e-8)
+        rollout_normalized = rollout / rollout_mean
+
+        per_step_adv = vd * rollout_normalized
+
+        all_obs.append(tensors["observations"])
+        all_actions.append(tensors["actions"])
+        all_advantages.append(per_step_adv)
+
+    return all_obs, all_actions, all_advantages
+
+
 def compute_credit_stats(credit, mask):
     """Compute statistics about credit distribution for logging."""
     valid = credit[mask] if mask is not None else credit.reshape(-1)

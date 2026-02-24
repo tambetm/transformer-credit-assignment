@@ -28,6 +28,8 @@ ALGO_COLORS = {
     "Gradient_Input": "#FF9800",       # Orange
     "Integrated_Gradients": "#4CAF50", # Green
     "Hybrid_Credit": "#9C27B0",        # Purple
+    "GSVD": "#00BCD4",                 # Cyan (new)
+    "Attention_Rollout": "#FF5722",    # Deep Orange (new)
 }
 
 ALGO_LABELS = {
@@ -38,6 +40,8 @@ ALGO_LABELS = {
     "Gradient_Input": "Gradient x Input",
     "Integrated_Gradients": "Integrated Gradients",
     "Hybrid_Credit": "Hybrid (Grad + VD)",
+    "GSVD": "GSVD (Grad-Sharp VD)",
+    "Attention_Rollout": "Attention Rollout",
 }
 
 ALGO_LINESTYLES = {
@@ -48,6 +52,8 @@ ALGO_LINESTYLES = {
     "Gradient_Input": "-",
     "Integrated_Gradients": "-",
     "Hybrid_Credit": "-",
+    "GSVD": "-",
+    "Attention_Rollout": "--",
 }
 
 
@@ -370,7 +376,8 @@ def main():
     environments = ["CartPole-v1", "SparseCartPole"]
     algorithms = list(ALGO_COLORS.keys())
 
-    gradient_algos = ["Gradient_Norm", "Gradient_Input", "Integrated_Gradients", "Hybrid_Credit"]
+    gradient_algos = ["Gradient_Norm", "Gradient_Input", "Integrated_Gradients",
+                      "Hybrid_Credit", "GSVD", "Attention_Rollout"]
     predictor_algos = ["RUDDER_ValueDiff"] + gradient_algos
 
     # Filter to available envs

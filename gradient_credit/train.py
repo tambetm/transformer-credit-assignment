@@ -1,6 +1,6 @@
 """Main training script for gradient-based credit assignment experiments.
 
-Runs 7 algorithms on 2 environments with multiple seeds.
+Runs 9 algorithms on 2 environments with multiple seeds.
 """
 
 import os
@@ -19,6 +19,8 @@ from .algorithms.gradient_norm_credit import GradientNormCreditAlgo
 from .algorithms.gradient_input_credit import GradientInputCreditAlgo
 from .algorithms.integrated_gradients_credit import IntegratedGradientsCreditAlgo
 from .algorithms.hybrid_credit import HybridCreditAlgo
+from .algorithms.gsvd_credit import GSVDCreditAlgo
+from .algorithms.attention_rollout_credit import AttentionRolloutCreditAlgo
 
 
 DEFAULT_CONFIG = {
@@ -58,6 +60,8 @@ ALGORITHMS = {
     "Gradient_Input": GradientInputCreditAlgo,
     "Integrated_Gradients": IntegratedGradientsCreditAlgo,
     "Hybrid_Credit": HybridCreditAlgo,
+    "GSVD": GSVDCreditAlgo,
+    "Attention_Rollout": AttentionRolloutCreditAlgo,
 }
 
 

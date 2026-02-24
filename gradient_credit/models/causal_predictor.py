@@ -2,10 +2,13 @@
 
 Causal transformer for return prediction (d_model=32, 2 heads — same size as
 experiments 1 & 2 for comparable results).
-Supports three gradient-based credit methods:
+Supports gradient-based credit methods:
   - grad_norm: ||dg/d_embedded_t||_2 (unsigned saliency)
   - grad_x_input: (dg/d_embedded_t . embedded_t) (signed contribution)
   - integrated_grads: averaged gradients along interpolation path (signed, principled)
+
+Plus attention-based credit:
+  - attention_rollout: multi-layer attention rollout for information flow tracing
 
 Also retains value-difference credit from RUDDER for hybrid and comparison.
 """
@@ -177,6 +180,92 @@ class CausalReturnPredictor(nn.Module):
             value_diffs = value_diffs * mask.float()
 
         return predicted_returns, value_diffs, pred_normalized
+
+    def forward_with_attention(self, states: torch.Tensor, mask: torch.Tensor = None,
+                               actions: torch.Tensor = None):
+        """Forward pass that also returns per-layer attention weights.
+
+        Returns:
+            predicted_returns: (batch, seq_len) denormalized
+            value_diffs: (batch, seq_len) normalized value differences
+            pred_normalized: (batch, seq_len) normalized predictions
+            attention_weights: list of (batch, seq_len, seq_len) per layer
+        """
+        embedded = self.embed(states, actions)
+        seq_len = embedded.size(1)
+        x = self.pos_enc(embedded)
+
+        causal_mask = torch.triu(
+            torch.ones(seq_len, seq_len, dtype=torch.bool, device=x.device),
+            diagonal=1,
+        )
+        key_padding_mask = ~mask if mask is not None else None
+
+        attention_weights = []
+        for layer in self.layers:
+            attn_out, attn_w = layer["attn"](
+                x, x, x,
+                attn_mask=causal_mask,
+                key_padding_mask=key_padding_mask,
+                need_weights=True,
+                average_attn_weights=True,
+            )
+            attention_weights.append(attn_w)  # (B, T, T) averaged over heads
+            x = layer["norm1"](x + layer["drop1"](attn_out))
+            ff_out = layer["ff"](x)
+            x = layer["norm2"](x + layer["drop2"](ff_out))
+
+        pred_normalized = self.return_head(x).squeeze(-1)
+        predicted_returns = self.denormalize_returns(pred_normalized)
+
+        batch_size = states.size(0)
+        zero_init = torch.zeros(batch_size, 1, device=states.device)
+        v_sequence = torch.cat([zero_init, pred_normalized], dim=1)
+        value_diffs = v_sequence[:, 1:] - v_sequence[:, :-1]
+
+        if mask is not None:
+            value_diffs = value_diffs * mask.float()
+
+        return predicted_returns, value_diffs, pred_normalized, attention_weights
+
+    def get_attention_rollout_credit(self, states, actions, mask):
+        """Compute attention rollout credit weights.
+
+        Traces information flow from each input position to the final position
+        by multiplying attention matrices across layers (accounting for residual
+        connections via the 0.5*A + 0.5*I formulation from Abnar & Zuidema, 2020).
+
+        Returns:
+            rollout_credit: (B, T) per-timestep credit (detached)
+            value_diffs: (B, T) value differences (detached)
+            pred_normalized: (B, T) normalized predictions (detached)
+        """
+        with torch.no_grad():
+            _, value_diffs, pred_normalized, attention_weights = (
+                self.forward_with_attention(states, mask, actions))
+
+        B, T = states.size(0), states.size(1)
+
+        # Attention rollout: product of (0.5 * A^l + 0.5 * I) across layers
+        # This traces total information flow accounting for residual connections.
+        eye = torch.eye(T, device=states.device).unsqueeze(0).expand(B, -1, -1)
+        rollout = eye.clone()
+
+        for attn_w in attention_weights:
+            # Mix attention with identity to account for residual connection
+            residual_attn = 0.5 * attn_w + 0.5 * eye
+            rollout = torch.bmm(residual_attn, rollout)
+
+        # Extract flow from each input position to the final valid position
+        last_indices = mask.sum(dim=1).long() - 1  # (B,)
+        rollout_credit = torch.zeros(B, T, device=states.device)
+        for b in range(B):
+            rollout_credit[b] = rollout[b, last_indices[b]]
+
+        # Zero out padding
+        rollout_credit = rollout_credit * mask.float()
+
+        return rollout_credit.detach(), value_diffs.detach(), pred_normalized.detach()
 
     def get_gradient_credit(self, states, actions, mask, method='grad_norm',
                             n_ig_steps=10):

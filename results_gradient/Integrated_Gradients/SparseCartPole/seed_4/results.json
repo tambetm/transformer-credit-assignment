@@ -106,6 +106,6 @@
   ],
   "mean_final_return": 44.67,
   "std_final_return": 27.14997421729899,
-  "mean_update_time": 0.25334500975725127,
-  "total_update_time": 166.19432640075684
+  "mean_update_time": 0.20895831686694447,
+  "total_update_time": 137.07665586471558
 }
