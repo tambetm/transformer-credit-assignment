@@ -1,6 +1,6 @@
 """Main training script for gradient-based credit assignment experiments.
 
-Runs 7 algorithms on 4 environments with multiple seeds.
+Runs 7 algorithms on 2 environments with multiple seeds.
 """
 
 import os
@@ -23,7 +23,7 @@ from .algorithms.hybrid_credit import HybridCreditAlgo
 
 DEFAULT_CONFIG = {
     "num_seeds": 5,
-    "total_timesteps": 300_000,
+    "total_timesteps": 200_000,
     "lr_policy": 3e-4,
     "lr_predictor": 5e-4,
     "lr_value": 1e-3,
@@ -34,10 +34,10 @@ DEFAULT_CONFIG = {
     "ppo_gae_lambda": 0.95,
     "batch_size": 2048,
     "episodes_per_update": 10,
-    "predictor_d_model": 128,
-    "predictor_nhead": 4,
+    "predictor_d_model": 32,
+    "predictor_nhead": 2,
     "predictor_layers": 2,
-    "predictor_d_ff": 256,
+    "predictor_d_ff": 64,
     "predictor_dropout": 0.1,
     "replay_buffer_size": 300,
     "predictor_train_steps": 3,
@@ -47,8 +47,6 @@ DEFAULT_CONFIG = {
 
 ENVIRONMENTS = {
     "CartPole-v1": lambda: gym.make("CartPole-v1"),
-    "Acrobot-v1": lambda: gym.make("Acrobot-v1"),
-    "LunarLander-v3": lambda: gym.make("LunarLander-v3"),
     "SparseCartPole": lambda: SparseCartPole(gym.make("CartPole-v1")),
 }
 

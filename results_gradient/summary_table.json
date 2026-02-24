@@ -1,0 +1,100 @@
+[
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "REINFORCE + EMA",
+    "algo_key": "REINFORCE_EMA",
+    "mean_return": 223.5,
+    "std_return": 5.7
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "PPO",
+    "algo_key": "PPO",
+    "mean_return": 490.2,
+    "std_return": 6.0
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "RUDDER Value Diff",
+    "algo_key": "RUDDER_ValueDiff",
+    "mean_return": 106.6,
+    "std_return": 8.8
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "Gradient Norm",
+    "algo_key": "Gradient_Norm",
+    "mean_return": 46.5,
+    "std_return": 8.9
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "Gradient x Input",
+    "algo_key": "Gradient_Input",
+    "mean_return": 26.0,
+    "std_return": 12.4
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "Integrated Gradients",
+    "algo_key": "Integrated_Gradients",
+    "mean_return": 25.3,
+    "std_return": 9.8
+  },
+  {
+    "environment": "CartPole-v1",
+    "algorithm": "Hybrid (Grad + VD)",
+    "algo_key": "Hybrid_Credit",
+    "mean_return": 65.5,
+    "std_return": 10.7
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "REINFORCE + EMA",
+    "algo_key": "REINFORCE_EMA",
+    "mean_return": 103.8,
+    "std_return": 6.7
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "PPO",
+    "algo_key": "PPO",
+    "mean_return": 42.5,
+    "std_return": 4.2
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "RUDDER Value Diff",
+    "algo_key": "RUDDER_ValueDiff",
+    "mean_return": 120.1,
+    "std_return": 32.3
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "Gradient Norm",
+    "algo_key": "Gradient_Norm",
+    "mean_return": 61.6,
+    "std_return": 17.3
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "Gradient x Input",
+    "algo_key": "Gradient_Input",
+    "mean_return": 27.0,
+    "std_return": 9.6
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "Integrated Gradients",
+    "algo_key": "Integrated_Gradients",
+    "mean_return": 34.9,
+    "std_return": 12.7
+  },
+  {
+    "environment": "SparseCartPole",
+    "algorithm": "Hybrid (Grad + VD)",
+    "algo_key": "Hybrid_Credit",
+    "mean_return": 72.5,
+    "std_return": 5.9
+  }
+]

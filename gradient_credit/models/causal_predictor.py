@@ -1,6 +1,7 @@
 """Causal Return Predictor with gradient-based credit assignment.
 
-Scaled-up causal transformer for return prediction (d_model=128, 4 heads).
+Causal transformer for return prediction (d_model=32, 2 heads — same size as
+experiments 1 & 2 for comparable results).
 Supports three gradient-based credit methods:
   - grad_norm: ||dg/d_embedded_t||_2 (unsigned saliency)
   - grad_x_input: (dg/d_embedded_t . embedded_t) (signed contribution)
@@ -35,11 +36,11 @@ class SinusoidalPositionalEncoding(nn.Module):
 class CausalReturnPredictor(nn.Module):
     """Causal transformer for return prediction with gradient credit methods.
 
-    Scaled up from experiment 2 (d_model 32->128, nhead 2->4, d_ff 64->256).
+    Same size as experiments 1 & 2 (d_model=32, nhead=2, d_ff=64).
     """
 
-    def __init__(self, obs_dim: int, action_dim: int = None, d_model: int = 128,
-                 nhead: int = 4, num_layers: int = 2, d_ff: int = 256,
+    def __init__(self, obs_dim: int, action_dim: int = None, d_model: int = 32,
+                 nhead: int = 2, num_layers: int = 2, d_ff: int = 64,
                  dropout: float = 0.1):
         super().__init__()
         self.d_model = d_model

@@ -367,7 +367,7 @@ def main():
     parser.add_argument("--output-dir", type=str, default="plots_gradient")
     args = parser.parse_args()
 
-    environments = ["CartPole-v1", "Acrobot-v1", "LunarLander-v3", "SparseCartPole"]
+    environments = ["CartPole-v1", "SparseCartPole"]
     algorithms = list(ALGO_COLORS.keys())
 
     gradient_algos = ["Gradient_Norm", "Gradient_Input", "Integrated_Gradients", "Hybrid_Credit"]
